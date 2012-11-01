@@ -514,7 +514,7 @@ class Connection(object):
             self.consumer_thread = eventlet.spawn(_consumer_thread)
         return self.consumer_thread
 
-    def create_consumer(self, topic, proxy, fanout=False):
+    def create_consumer(self, topic, proxy, fanout=False, name=None):
         """Create a consumer that calls a method in a proxy object"""
         proxy_cb = rpc_amqp.ProxyCallback(
             self.conf, proxy,

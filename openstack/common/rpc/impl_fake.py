@@ -98,7 +98,7 @@ class Connection(object):
     def __init__(self):
         self.consumers = []
 
-    def create_consumer(self, topic, proxy, fanout=False):
+    def create_consumer(self, topic, proxy, fanout=False, name=None):
         consumer = Consumer(topic, proxy)
         self.consumers.append(consumer)
         if topic not in CONSUMERS:

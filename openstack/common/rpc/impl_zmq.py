@@ -488,7 +488,7 @@ class Connection(rpc_common.Connection):
     def __init__(self, conf):
         self.reactor = ZmqReactor(conf)
 
-    def create_consumer(self, topic, proxy, fanout=False):
+    def create_consumer(self, topic, proxy, fanout=False, name=None):
         # Only consume on the base topic name.
         topic = topic.split('.', 1)[0]
 

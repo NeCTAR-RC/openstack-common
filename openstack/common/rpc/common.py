@@ -106,7 +106,7 @@ class Connection(object):
         """
         raise NotImplementedError()
 
-    def create_consumer(self, topic, proxy, fanout=False):
+    def create_consumer(self, topic, proxy, fanout=False, name=None):
         """Create a consumer on this connection.
 
         A consumer is associated with a message queue on the backend message
@@ -127,6 +127,8 @@ class Connection(object):
         :param fanout: Whether or not this is a fanout topic.  See the
                        documentation for the topic parameter for some
                        additional comments on this.
+        :param name:  For fanout queues, the suffix to use for the name of the
+                      queue. If name=None, the suffix is a generated uuid.
         """
         raise NotImplementedError()
 

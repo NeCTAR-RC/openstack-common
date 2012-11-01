@@ -251,26 +251,35 @@ class TopicConsumer(ConsumerBase):
 class FanoutConsumer(ConsumerBase):
     """Consumer class for 'fanout'"""
 
-    def __init__(self, conf, channel, topic, callback, tag, **kwargs):
+    def __init__(self, conf, channel, topic, callback, tag, queue_name=None, **kwargs):
         """Init a 'fanout' queue.
 
         'channel' is the amqp channel to use
         'topic' is the topic to listen on
         'callback' is the callback to call when messages are received
         'tag' is a unique ID for the consumer on the channel
+        'queue_name' is the suffix to use when naming the queue
 
         Other kombu options may be passed
         """
-        unique = uuid.uuid4().hex
+        durable = conf.rabbit_durable_queues
+
         exchange_name = '%s_fanout' % topic
-        queue_name = '%s_fanout_%s' % (topic, unique)
+        if queue_name is None:
+            queue_name = uuid.uuid4().hex
+            durable = False
+            kwargs.pop('durable', None)
+ 
+        queue_name = '%s_%s' % (exchange_name, queue_name)
 
         # Default options
-        options = {'durable': False,
-                   'queue_arguments': _get_queue_arguments(conf),
-                   'auto_delete': True,
-                   'exclusive': True}
+        options = {'durable': durable,
+                   'queue_arguments': _get_queue_arguments(conf),}
         options.update(kwargs)
+        if 'auto_delete' not in options:
+            options['auto_delete'] = not options['durable']
+        if 'exclusive' not in options:
+            options['exclusive'] = not options['durable']
         exchange = kombu.entity.Exchange(name=exchange_name, type='fanout',
                                          durable=options['durable'],
                                          auto_delete=options['auto_delete'])
@@ -348,9 +357,9 @@ class FanoutPublisher(Publisher):
 
         Kombu options may be passed as keyword args to override defaults
         """
-        options = {'durable': False,
-                   'auto_delete': True,
-                   'exclusive': True}
+        options = {'durable': conf.rabbit_durable_queues,
+                   'auto_delete': not conf.rabbit_durable_queues,
+                   'exclusive': not conf.rabbit_durable_queues}
         options.update(kwargs)
         super(FanoutPublisher, self).__init__(channel, '%s_fanout' % topic,
                                               None, type='fanout', **options)
@@ -586,7 +595,7 @@ class Connection(object):
             self.channel._new_queue('ae.undeliver')
         self.consumers = []
 
-    def declare_consumer(self, consumer_cls, topic, callback):
+    def declare_consumer(self, consumer_cls, topic, callback, **kwargs):
         """Create a Consumer using the class that was passed in and
         add it to our list of consumers
         """
@@ -598,7 +607,7 @@ class Connection(object):
 
         def _declare_consumer():
             consumer = consumer_cls(self.conf, self.channel, topic, callback,
-                                    self.consumer_num.next())
+                                    self.consumer_num.next(), **kwargs)
             self.consumers.append(consumer)
             return consumer
 
@@ -674,21 +683,21 @@ class Connection(object):
                                                 ),
                               topic, callback)
 
-    def declare_fanout_consumer(self, topic, callback):
+    def declare_fanout_consumer(self, topic, callback, **kwargs):
         """Create a 'fanout' consumer"""
-        self.declare_consumer(FanoutConsumer, topic, callback)
+        self.declare_consumer(FanoutConsumer, topic, callback, **kwargs)
 
-    def direct_send(self, msg_id, msg):
+    def direct_send(self, msg_id, msg, **kwargs):
         """Send a 'direct' message"""
-        self.publisher_send(DirectPublisher, msg_id, msg)
+        self.publisher_send(DirectPublisher, msg_id, msg, **kwargs)
 
-    def topic_send(self, topic, msg):
+    def topic_send(self, topic, msg, **kwargs):
         """Send a 'topic' message"""
-        self.publisher_send(TopicPublisher, topic, msg)
+        self.publisher_send(TopicPublisher, topic, msg, **kwargs)
 
-    def fanout_send(self, topic, msg):
+    def fanout_send(self, topic, msg, **kwargs):
         """Send a 'fanout' message"""
-        self.publisher_send(FanoutPublisher, topic, msg)
+        self.publisher_send(FanoutPublisher, topic, msg, **kwargs)
 
     def notify_send(self, topic, msg, **kwargs):
         """Send a notify message on a topic"""
@@ -714,16 +723,16 @@ class Connection(object):
             self.consumer_thread = eventlet.spawn(_consumer_thread)
         return self.consumer_thread
 
-    def create_consumer(self, topic, proxy, fanout=False):
+    def create_consumer(self, topic, proxy, fanout=False, name=None):
         """Create a consumer that calls a method in a proxy object"""
         proxy_cb = rpc_amqp.ProxyCallback(
             self.conf, proxy,
             rpc_amqp.get_connection_pool(self.conf, Connection))
 
         if fanout:
-            self.declare_fanout_consumer(topic, proxy_cb)
+            self.declare_fanout_consumer(topic, proxy_cb, queue_name=name)
         else:
-            self.declare_topic_consumer(topic, proxy_cb)
+            self.declare_topic_consumer(topic, proxy_cb, queue_name=name)
 
     def create_worker(self, topic, proxy, pool_name):
         """Create a worker that calls a method in a proxy object"""

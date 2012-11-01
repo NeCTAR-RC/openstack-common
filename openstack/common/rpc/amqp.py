@@ -132,8 +132,8 @@ class ConnectionContext(rpc_common.Connection):
         """Caller is done with this connection."""
         self._done()
 
-    def create_consumer(self, topic, proxy, fanout=False):
-        self.connection.create_consumer(topic, proxy, fanout)
+    def create_consumer(self, topic, proxy, fanout=False, name=None):
+        self.connection.create_consumer(topic, proxy, fanout, name)
 
     def create_worker(self, topic, proxy, pool_name):
         self.connection.create_worker(topic, proxy, pool_name)
